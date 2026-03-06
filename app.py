@@ -1,13 +1,14 @@
+"""
+Hlavni modul pro Streamlit Dashboard.
+Konfigurace vzhledu stranky roztahne obsah na celou sirku obrazovky a nastavi titulek.
+Automaticky refresh stranky zajistuje znovunacteni a prepsani metrik nejnovejsimi hodnotami.
+"""
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import time
 
-"""
-Konfigurace vzhledu stranky.
-Roztahne obsah na celou sirku obrazovky a nastavi titulek.
-"""
 st.set_page_config(page_title="PyProfit Live Trading", layout="wide")
 
 def init_connection():
@@ -23,6 +24,8 @@ def init_connection():
 def render_dashboard():
     """
     Hlavni funkce pro stazeni dat a vykresleni obsahu webu.
+    Nacita data z listu Live (radek 2) a historii z listu History.
+    Vykresluje metriky rozhodovani Neuronove site a stav aktualni pozice.
     """
     st.title("📈 PyProfit AI Trading Dashboard")
     
@@ -34,9 +37,6 @@ def render_dashboard():
         st.error(f"Chyba pripojeni k databazi: {e}")
         return
 
-    """
-    Nacteni dat z listu Live (radek 2).
-    """
     live_data = sheet_live.row_values(2)
     
     if not live_data or len(live_data) < 9:
@@ -55,9 +55,6 @@ def render_dashboard():
 
     st.caption(f"Poslední aktualizace: {last_update}")
 
-    """
-    Vykresleni metrik rozhodovani Neuronove site.
-    """
     st.subheader("🤖 Pohled Neuronové Sítě (Poslední Svíčka)")
     col_buy, col_hold, col_sell = st.columns(3)
     with col_buy:
@@ -69,9 +66,6 @@ def render_dashboard():
 
     st.markdown("---")
 
-    """
-    Vykresleni stavu aktualniho obchodu.
-    """
     st.subheader("📊 Aktuální Otevřená Pozice")
     if status == "FLAT":
         st.success("Žádná otevřená pozice. Bot čeká na příležitost.")
@@ -88,9 +82,6 @@ def render_dashboard():
 
     st.markdown("---")
 
-    """
-    Nacteni a vykresleni historie uzavrenych obchodu.
-    """
     st.subheader("📚 Historie Obchodů")
     hist_data = sheet_history.get_all_values()
     
@@ -103,10 +94,6 @@ def render_dashboard():
         st.info("Zatím nebyl uzavřen žádný obchod.")
 
 if __name__ == "__main__":
-    """
-    Automaticky refresh stranky pro ziskani novych dat.
-    Streamlit se znovunacte a prepise metriky nejnovejsimi hodnotami.
-    """
     render_dashboard()
     time.sleep(30)
     st.rerun()
