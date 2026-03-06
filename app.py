@@ -11,6 +11,19 @@ import time
 
 st.set_page_config(page_title="PyProfit Live Trading", layout="wide")
 
+def safe_float(val):
+    """
+    Bezpecne pretypuje textovou hodnotu z Google Tabulky na desetinne cislo.
+    Automaticky nahradi ceske desetinne carky za tecky.
+    Pokud prevod selze (napr. prazdna bunka), vrati bezpecnou nulu, aby aplikace nespadla.
+    """
+    try:
+        if isinstance(val, str):
+            val = val.replace(',', '.')
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
 def init_connection():
     """
     Inicializuje pripojeni ke Google Sheets pomoci servisniho uctu.
@@ -25,7 +38,7 @@ def render_dashboard():
     """
     Hlavni funkce pro stazeni dat a vykresleni obsahu webu.
     Nacita data z listu Live (radek 2) a historii z listu History.
-    Vykresluje metriky rozhodovani Neuronove site a stav aktualni pozice.
+    Hodnoty pravdepodobnosti formatuje striktne na 2 desetinna mista pro cisty webovy vystup.
     """
     st.title("📈 PyProfit AI Trading Dashboard")
     
@@ -36,7 +49,7 @@ def render_dashboard():
     except Exception as e:
         st.error(f"Chyba pripojeni k databazi: {e}")
         return
-        
+
     live_data = sheet_live.row_values(2)
     
     if not live_data or len(live_data) < 9:
@@ -50,9 +63,9 @@ def render_dashboard():
     current_price = live_data[4]
     profit = live_data[5]
     
-    buy_pct = f"{float(live_data[6]):.2f}"
-    hold_pct = f"{float(live_data[7]):.2f}"
-    sell_pct = f"{float(live_data[8]):.2f}"
+    buy_pct = f"{safe_float(live_data[6]):.2f}"
+    hold_pct = f"{safe_float(live_data[7]):.2f}"
+    sell_pct = f"{safe_float(live_data[8]):.2f}"
 
     st.caption(f"Poslední aktualizace: {last_update}")
 
