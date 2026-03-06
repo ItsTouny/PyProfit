@@ -7,16 +7,20 @@ import time
 def setup_page():
     """
     Nastavi parametry stranky pro siroky format, vlozi hlavni titulek
-    a pomoci CSS skryje vychozi prvky Streamlitu (Fork tlacitko, menu, footer).
+    a pomoci CSS skryje veskere vychozi prvky Streamlitu,
+    vcetne plovouciho odznaku s GitHub profilovkou vpravo dole.
     """
     st.set_page_config(page_title="PyProfit | Live AI Trading", page_icon="📈", layout="wide")
     
     hide_streamlit_style = """
             <style>
             [data-testid="stToolbar"] {visibility: hidden !important;}
-            footer {visibility: hidden !important;}
             #MainMenu {visibility: hidden !important;}
             header {visibility: hidden !important;}
+            footer {visibility: hidden !important;}
+            .viewerBadge_container {display: none !important;}
+            .viewerBadge_link {display: none !important;}
+            [data-testid="viewerBadge"] {display: none !important;}
             </style>
             """
     st.markdown(hide_streamlit_style, unsafe_allow_html=True)
