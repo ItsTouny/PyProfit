@@ -1,11 +1,8 @@
-"""
-Hlavni webovy dashboard pro PyProfit.
-Vizualizuje zive obchody (Unrealized PnL) a historicke statistiky ze dvou listu Google Tabulky.
-"""
 import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import time
 
 def setup_page():
     """
@@ -18,7 +15,7 @@ def setup_page():
 @st.cache_data(ttl=15)
 def fetch_all_data():
     """
-    Stahne data z obou listu (Live a History).
+    Stahne data z obou listu (Live a History) Google Tabulky.
     Cache je nastavena na 15 sekund, aby se nerealizovany PnL aktualizoval velmi rychle.
     """
     try:
@@ -42,32 +39,35 @@ def render_live_status(df_live):
     """
     Vykresli prominentni sekci s aktualne otevrenym obchodem.
     Pokud je stav FLAT, zobrazi informaci o cekani na signal.
+    Bezpecne nacita hodnoty pomoci metody get() pro pripad chybjejicich dat.
     """
     st.subheader("🔴 Live Market Status")
     
     if df_live.empty:
-        st.info("Zadne spojeni s botem.")
+        st.info("Zadne spojeni s botem nebo prazdna tabulka Live.")
         return
 
     live_data = df_live.iloc[0]
-    stav = live_data["Stav"]
+    stav = live_data.get("Stav", "FLAT")
     
     if stav == "FLAT":
-        st.info(f"Bot je aktuálně bez pozice (FLAT). Čeká na další obchodní příležitost. Poslední ping: {live_data['Posledni_Aktualizace']}")
+        posledni_ping = live_data.get("Posledni_Aktualizace", "Neznámý")
+        st.info(f"Bot je aktuálně bez pozice (FLAT). Čeká na další obchodní příležitost. Poslední ping: {posledni_ping}")
     else:
         col1, col2, col3, col4 = st.columns(4)
-        unrealized_pnl = float(live_data["Unrealized_PnL"])
+        unrealized_pnl = float(live_data.get("Unrealized_PnL", 0.0))
+        lot_size = live_data.get("Lot", 0)
         
-        col1.metric("Směr obchodu", f"{stav} {live_data['Lot']} Lot")
-        col2.metric("Vstupní cena", str(live_data["Vstupni_Cena"]))
-        col3.metric("Aktuální cena", str(live_data["Aktualni_Cena"]))
+        col1.metric("Směr obchodu", f"{stav} {lot_size} Lot")
+        col2.metric("Vstupní cena", str(live_data.get("Vstupni_Cena", 0.0)))
+        col3.metric("Aktuální cena", str(live_data.get("Aktualni_Cena", 0.0)))
         col4.metric("Unrealized PnL", f"${unrealized_pnl:.2f}", f"{unrealized_pnl:.2f}")
 
     st.markdown("---")
 
 def render_historical_metrics(df_history):
     """
-    Vykresli celkove statistiky a historii uzavrenych obchodu.
+    Vykresli celkove statistiky a historii uzavrenych obchodu vcetne Equity krivky.
     """
     st.subheader("📊 Celkové statistiky")
     
@@ -86,7 +86,8 @@ def render_historical_metrics(df_history):
     col3.metric("Win Rate", f"{win_rate:.1f} %")
     
     st.subheader("Vývoj účtu (Equity Curve)")
-    st.line_chart(df_history.set_index("Cas")["Zustatek"])
+    if "Cas" in df_history.columns and "Zustatek" in df_history.columns:
+        st.line_chart(df_history.set_index("Cas")["Zustatek"])
 
     st.subheader("Historie obchodů")
     st.dataframe(df_history, use_container_width=True)
@@ -94,11 +95,16 @@ def render_historical_metrics(df_history):
 def main():
     """
     Spousteci bod webove aplikace.
+    Stahne data, vykresli dashboard a po 15 sekundach vynuti automaticky
+    restart aplikace, cimz se stranka udrzuje ziva bez nutnosti mackat F5.
     """
     setup_page()
     df_live, df_history = fetch_all_data()
     render_live_status(df_live)
     render_historical_metrics(df_history)
+    
+    time.sleep(15)
+    st.rerun()
 
 if __name__ == "__main__":
     main()
