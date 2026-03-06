@@ -36,7 +36,7 @@ def render_dashboard():
     except Exception as e:
         st.error(f"Chyba pripojeni k databazi: {e}")
         return
-
+        
     live_data = sheet_live.row_values(2)
     
     if not live_data or len(live_data) < 9:
@@ -49,9 +49,10 @@ def render_dashboard():
     open_price = live_data[3]
     current_price = live_data[4]
     profit = live_data[5]
-    buy_pct = live_data[6]
-    hold_pct = live_data[7]
-    sell_pct = live_data[8]
+    
+    buy_pct = f"{float(live_data[6]):.2f}"
+    hold_pct = f"{float(live_data[7]):.2f}"
+    sell_pct = f"{float(live_data[8]):.2f}"
 
     st.caption(f"Poslední aktualizace: {last_update}")
 
