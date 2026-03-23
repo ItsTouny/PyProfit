@@ -11,11 +11,12 @@ import time
 
 st.set_page_config(page_title="PyProfit Live Trading", layout="wide")
 
+SYMBOLS = ["EURUSD", "USDJPY", "GBPUSD", "AUDUSD", "USDCAD"]
+
 def safe_float(val):
     """
     Bezpecne pretypuje textovou hodnotu z Google Tabulky na desetinne cislo.
     Automaticky nahradi ceske desetinne carky za tecky.
-    Pokud prevod selze (napr. prazdna bunka), vrati bezpecnou nulu, aby aplikace nespadla.
     """
     try:
         if isinstance(val, str):
@@ -26,8 +27,7 @@ def safe_float(val):
 
 def init_connection():
     """
-    Inicializuje pripojeni ke Google Sheets pomoci servisniho uctu.
-    Pouziva uloziste Streamlit Secrets pro bezpecne nacteni udaju.
+    Inicializuje pripojeni ke Google Sheets pomoci servisniho uctu z uloziste Secrets.
     """
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
@@ -36,9 +36,8 @@ def init_connection():
 
 def render_dashboard():
     """
-    Hlavni funkce pro stazeni dat a vykresleni obsahu webu.
-    Nacita data z listu Live (radek 2) a historii z listu History.
-    Hodnoty pravdepodobnosti formatuje striktne na 2 desetinna mista pro cisty webovy vystup.
+    Hlavni funkce pro stazeni dat a vykresleni obsahu webu napric 5 trhy.
+    Vyuziva zalozky (tabs) pro ciste a prehledne UI.
     """
     st.title("📈 PyProfit AI Trading Dashboard")
     
@@ -50,60 +49,76 @@ def render_dashboard():
         st.error(f"Chyba pripojeni k databazi: {e}")
         return
 
-    live_data = sheet_live.row_values(2)
+    # Stazeni vsech 5 radku naráz (bunky A2 az I6) setri kvoty Google API
+    live_data_rows = sheet_live.get("A2:I6")
     
-    if not live_data or len(live_data) < 9:
+    if not live_data_rows:
         st.info("Cekam na prvni data od obchodniho bota...")
         return
 
-    last_update = live_data[0]
-    status = live_data[1]
-    volume = live_data[2]
-    open_price = live_data[3]
-    current_price = live_data[4]
-    profit = live_data[5]
-    
-    buy_pct = f"{safe_float(live_data[6]):.2f}"
-    hold_pct = f"{safe_float(live_data[7]):.2f}"
-    sell_pct = f"{safe_float(live_data[8]):.2f}"
+    # Vytvoreni zalozek pro kazdy menovy par
+    tabs = st.tabs(SYMBOLS)
 
-    st.caption(f"Poslední aktualizace: {last_update}")
+    for i, tab in enumerate(tabs):
+        with tab:
+            if i < len(live_data_rows):
+                row = live_data_rows[i]
+                
+                # Bezpecnostni vycpavka pro pripad, ze by chybel sloupec
+                while len(row) < 9:
+                    row.append("0")
 
-    st.subheader("🤖 Pohled Neuronové Sítě (Poslední Svíčka)")
-    col_buy, col_hold, col_sell = st.columns(3)
-    with col_buy:
-        st.metric(label="🟢 BUY Signál", value=f"{buy_pct} %")
-    with col_hold:
-        st.metric(label="⚪ HOLD Signál", value=f"{hold_pct} %")
-    with col_sell:
-        st.metric(label="🔴 SELL Signál", value=f"{sell_pct} %")
+                last_update = row[0]
+                status_raw = row[1]
+                volume = row[2]
+                open_price = row[3]
+                current_price = row[4]
+                profit = row[5]
+                
+                buy_pct = f"{safe_float(row[6]):.2f}"
+                hold_pct = f"{safe_float(row[7]):.2f}"
+                sell_pct = f"{safe_float(row[8]):.2f}"
+
+                st.caption(f"Poslední aktualizace: {last_update}")
+
+                st.subheader(f"🤖 Pohled Neuronové Sítě ({SYMBOLS[i]})")
+                col_buy, col_hold, col_sell = st.columns(3)
+                with col_buy:
+                    st.metric(label="🟢 BUY Signál", value=f"{buy_pct} %")
+                with col_hold:
+                    st.metric(label="⚪ HOLD Signál", value=f"{hold_pct} %")
+                with col_sell:
+                    st.metric(label="🔴 SELL Signál", value=f"{sell_pct} %")
+
+                st.markdown("---")
+
+                st.subheader("📊 Aktuální Otevřená Pozice")
+                if "FLAT" in status_raw:
+                    st.success("Žádná otevřená pozice. Bot čeká na čistý signál nad 70 %.")
+                else:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Stav", status_raw)
+                    with col2:
+                        st.metric("Velikost (Lot)", volume)
+                    with col3:
+                        st.metric("Vstupní Cena", open_price)
+                    with col4:
+                        st.metric("Aktuální Profit ($)", profit)
+            else:
+                st.info("Zatím nejsou data pro tento trh.")
 
     st.markdown("---")
 
-    st.subheader("📊 Aktuální Otevřená Pozice")
-    if status == "FLAT":
-        st.success("Žádná otevřená pozice. Bot čeká na příležitost.")
-    else:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Směr", status)
-        with col2:
-            st.metric("Velikost (Lot)", volume)
-        with col3:
-            st.metric("Vstupní Cena", open_price)
-        with col4:
-            st.metric("Aktuální Profit ($)", profit)
-
-    st.markdown("---")
-
-    st.subheader("📚 Historie Obchodů")
+    st.subheader("📚 Agregovaná Historie Obchodů")
     hist_data = sheet_history.get_all_values()
     
     if len(hist_data) > 1:
         headers = hist_data[0]
         rows = hist_data[1:]
         df_history = pd.DataFrame(rows, columns=headers)
-        st.dataframe(df_history, use_container_width=True)
+        # Zobrazeni dataframe od nejnovejsiho obchodu po nejstarsi
+        st.dataframe(df_history.iloc[::-1], use_container_width=True)
     else:
         st.info("Zatím nebyl uzavřen žádný obchod.")
 
